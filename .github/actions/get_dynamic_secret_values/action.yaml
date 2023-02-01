@@ -1,0 +1,35 @@
+name: "Get Dynamic Secret"
+description: "This action is used get secrets"
+author: "fractiunate"
+inputs:
+  secret-name:
+      required: true
+      description: ""
+outputs:
+  json_file_path:
+    description: "Interolated file-path"
+    value: ${{ steps.parse-json.outputs.json_file_path }}
+  content:
+    value: ${{ steps.parse-json.outputs.content }}
+    description: "Rendered values from layers.json"
+  
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+    - id: parse-json
+      name: "Parse Config (JSON)"
+      shell: bash
+      run: |
+
+        json_file_path=$(echo ''"${{ inputs.json_file_path }}"'')
+        # | sed "s/<stage>/$stage/g" | sed "s/<project>/$project_key/g" #WIP - eval required?
+        content="$(jq -c -r '.' "${json_file_path}")"
+      
+        # /----- Logging -----//
+        echo "[Info] content=${content}"
+
+        # /----- Outputs -----//
+        echo "json_file_path=$(echo ${json_file_path})" >> $GITHUB_OUTPUT
+        echo "content=$(echo ${content})" >> $GITHUB_OUTPUT
+        

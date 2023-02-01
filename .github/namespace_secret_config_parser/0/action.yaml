@@ -1,0 +1,65 @@
+# TODO: validate stage/ project ?
+# TODO: Check if required to return empty array for no values
+name: "Release-Config Parser"
+description: "This action is used to parse the release-config.json"
+author: "fractiunate"
+inputs:
+  stage:
+    required: true
+    description: "dev | rc | prod"
+  config_json:
+      required: false
+      description: "Path to release-config.json"
+      default: './config/release-config.json'
+outputs:
+  namespace_keys:
+    value: ${{ steps.parse-json.outputs.namespace_keys }}
+    description: '["ns1","ns2"]'
+  secrets_map:
+    value: ${{ steps.parse-json.outputs.secrets_map }}
+    description: '{ns1: [], ns2: [  "DEV_PROVIDER_USERNAME",  "DEV_PROVIDER_PASSWORD" ]}'
+  stage:
+    description: "Deployment stage"
+    value: ${{ steps.parse-json.outputs.stage}}
+    
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v3
+    - id: parse-json
+      name: "Parse Config (JSON)"
+      shell: bash
+      run: |
+
+        # /----- Set input defaults -----------//
+        stage=${{ inputs.stage || 'dev' }}
+        config_json=$(echo ''"${{ inputs.config_json }}"'' | sed "s/<stage>/$stage/g" | sed "s/<project>/$project/g" | sed "s/<project_id>/$project_id/g")
+
+        service_namespace_config="$(jq -c -r '.' "${config_json}"  | jq -r -c '.service_namespace_config')"
+        namespace_keys=$(echo ${service_namespace_config}  | jq -c -r 'with_entries(select(.value.enabled==true))| keys')
+        echo "[DEBUG] ${namespace_keys}"
+
+        ns_length=$(echo $namespace_keys | jq -c -r 'length'); ns_end="$(($ns_length-1))"
+        echo "[DEBUG] ${ns_length}"
+          for i in $(seq 0 ${ns_end});
+        do
+          namespace_k8s_secrets="[]"
+          secret_end="0"
+          export namespace_index="$i"          
+          namespace_string=$(echo "${namespace_keys}" | jq -r '.[env.namespace_index|tonumber]')
+          echo "[DEBUG] ${namespace_string}"
+          namespace_k8s_secrets=$(echo "${service_namespace_config}"  | jq --arg ns $namespace_string '.[$ns].k8s_secrets')
+          echo "[DEBUG] ${namespace_k8s_secrets}"
+        done
+
+
+        # /----- Logging -----//
+        echo "Input stage=${stage}"
+        echo "Input config_json=${config_json}"
+        echo "Input service_namespace_config=${service_namespace_config}"
+        echo "Input namespace_keys=${namespace_keys}"
+
+        # /----- Outputs -----//
+        echo "namespace_keys=$(echo ${namespace_keys})" >> $GITHUB_OUTPUT
+        echo "secrets_map=$(echo ${service_namespace_config})" >> $GITHUB_OUTPUT
+        echo "stage=$(echo ${stage})" >> $GITHUB_OUTPUT

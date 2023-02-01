@@ -1,0 +1,47 @@
+name: ".V1 Pipeline"
+# TODO: major rework: use inputs. from release-config.json instead of selected JSON properties --> more dynamic and adaptable
+on:
+  workflow_call:
+#
+# TODO
+# TODO
+# TODO
+# TODO
+#
+# 
+  prepare-secrets:
+    runs-on: ubuntu-20.04
+    name: "Prepare dynamic Secrets"
+    outputs:
+      stage: ${{ steps.k8s-ns-secret-parser.outputs.stage }}
+      namespace_keys: ${{ steps.k8s-ns-secret-parser.outputs.namespace_keys }}
+      secrets_map: ${{ steps.k8s-ns-secret-parser.outputs.secrets_map }}
+    steps:
+      - uses: actions/checkout@v3
+      - id: k8s-ns-secret-parser
+        name: "Parse release-config.json"
+        uses: ./.github/actions/namespace_secret_config_parser/0
+        with:
+          stage: "${{ inputs.stage }}"
+          # out namespace_keys ["ns1","ns2"]
+          # out  secrets_map: {ns1: [], ns2: [  "DEV_PROVIDER_USERNAME",  "DEV_PROVIDER_PASSWORD" ]}
+
+      - id: prepare-secrets
+        shell: bash
+        run: |
+          echo ${{ steps.k8s-ns-secret-parser.outputs.stage }}
+          echo ${{ steps.k8s-ns-secret-parser.outputs.namespace_keys }}
+          echo ${{ steps.k8s-ns-secret-parser.outputs.secrets_map }}
+  
+  generate-secrets:
+    name: "Generate Secrets"
+    needs: [prepare-secrets]
+    uses: ./.github/workflows/generate-secrets-v4.yaml
+    secrets: inherit
+    with:
+      stage: ${{needs.prepare-secrets.outputs.stage}}
+      namespace: "${{matrix.namespace}}"
+      secrets_map: ${{needs.prepare-secrets.outputs.secrets_map}}
+    strategy:
+      matrix:
+        namespace: ${{fromJSON(needs.prepare-secrets.outputs.namespace_keys)}}
